@@ -354,11 +354,13 @@ def train(model_name, fold_count, train_full_set=False, load_weights_path=None, 
     holdout_txt = "_h" + str(ndsb3_holdout) if manual_labels else ""
     if train_full_set:
         holdout_txt = "_fs" + holdout_txt
-    checkpoint = ModelCheckpoint("workdir/model_" + model_name + "_" + holdout_txt + "_e" + "{epoch:02d}-{val_loss:.4f}.hd5", monitor='val_loss', verbose=1, save_best_only=not train_full_set, save_weights_only=False, mode='auto', period=1)
-    checkpoint_fixed_name = ModelCheckpoint("workdir/model_" + model_name + "_" + holdout_txt + "_best.hd5", monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
+    os.chdir("/Users/macbook/Desktop/Lung Cancer Detection/Models")
+    checkpoint = ModelCheckpoint("model_" + model_name + "_" + holdout_txt + "_e" + "{epoch:02d}-{val_loss:.4f}.hd5", monitor='val_loss', verbose=1, save_best_only=not train_full_set, save_weights_only=False, mode='auto', period=1)
+    checkpoint_fixed_name = ModelCheckpoint("model_" + model_name + "_" + holdout_txt + "_best.hd5", monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
     #the data is input in the next line, the rest are just defining the neural network
     model.fit_generator(train_gen, len(train_files) / 1, 12, validation_data=holdout_gen, nb_val_samples=len(holdout_files) / 1, callbacks=[checkpoint, checkpoint_fixed_name, learnrate_scheduler])
-    model.save("workdir/model_" + model_name + "_" + holdout_txt + "_end.hd5")
+
+    model.save("model_" + model_name + "_" + holdout_txt + "_end.hd5")
 
 def rescale_patient_images2(images_zyx, target_shape, verbose=False):
     if verbose:
