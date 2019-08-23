@@ -304,7 +304,6 @@ def get_net(input_shape=(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE, 1), load_weight_path=N
     if USE_DROPOUT:
         x = Dropout(p=0.5)(x)
 
-    x = Dense(64, activation='relu')(x)
     out_class = Convolution3D(1, 1, 1, 1, activation="sigmoid", name="out_class_last")(x)
     out_class = Flatten(name="out_class")(out_class)
 
