@@ -356,7 +356,7 @@ def train(model_name, fold_count, train_full_set=False, load_weights_path=None, 
     checkpoint = ModelCheckpoint("model_" + model_name + "_" + holdout_txt + "_e" + "{epoch:02d}-{val_loss:.4f}.hd5", monitor='val_loss', verbose=1, save_best_only=not train_full_set, save_weights_only=False, mode='auto', period=1)
     checkpoint_fixed_name = ModelCheckpoint("model_" + model_name + "_" + holdout_txt + "_best.hd5", monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
     #the data is input in the next line, the rest are just defining the neural network
-    model.fit_generator(train_gen, len(train_files) / 1, 1, validation_data=holdout_gen, nb_val_samples=len(holdout_files) / 1, callbacks=[checkpoint, checkpoint_fixed_name, learnrate_scheduler])
+    model.fit_generator(train_gen, len(train_files) / 1, 12, validation_data=holdout_gen, nb_val_samples=len(holdout_files) / 1, callbacks=[checkpoint, checkpoint_fixed_name, learnrate_scheduler])
 
     model.save("model_" + model_name + "_" + holdout_txt + "_end.hd5")
 
