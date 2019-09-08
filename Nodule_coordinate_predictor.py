@@ -5,6 +5,7 @@ import random
 import datetime
 import pandas
 import ntpath
+import csv
 import cv2
 import numpy
 from typing import List, Tuple
@@ -53,13 +54,13 @@ def filter_patient_nodules_predictions(df_nodule_predictions: pandas.DataFrame, 
     patient_mask = load_patient_images(patient_id, src_dir, "*_m.png")
     delete_indices = []
     for index, row in df_nodule_predictions.iterrows():
-        z_perc = row["coord_z"]
-        y_perc = row["coord_y"]
-        center_x = int(round(row["coord_x"] * patient_mask.shape[2]))
+        z_perc = row["coordZ"]
+        y_perc = row["coordY"]
+        center_x = int(round(row["coordX"] * patient_mask.shape[2]))
         center_y = int(round(y_perc * patient_mask.shape[1]))
         center_z = int(round(z_perc * patient_mask.shape[0]))
 
-        mal_score = row["diameter_mm"]
+        #mal_score = row["diameter_mm"]
         start_y = center_y - view_size / 2
         start_x = center_x - view_size / 2
         nodule_in_mask = False
@@ -76,13 +77,13 @@ def filter_patient_nodules_predictions(df_nodule_predictions: pandas.DataFrame, 
             print("Nodule not in mask: ", (center_x, center_y, center_z))
             if mal_score > 0:
                 mal_score *= -1
-            df_nodule_predictions.loc[index, "diameter_mm"] = mal_score
+            #df_nodule_predictions.loc[index, "diameter_mm"] = mal_score
         else:
             if center_z < 30:
                 print("Z < 30: ", patient_id, " center z:", center_z, " y_perc: ",  y_perc)
                 if mal_score > 0:
                     mal_score *= -1
-                df_nodule_predictions.loc[index, "diameter_mm"] = mal_score
+                #df_nodule_predictions.loc[index, "diameter_mm"] = mal_score
 
 
             if (z_perc > 0.75 or z_perc < 0.25) and y_perc > 0.85:
@@ -119,7 +120,7 @@ def predict_cubes(model_path, continue_job, only_patient_id=None, luna16=True, m
     if flip:
         flip_ext = "_flip"
 
-    dst_dir += "predictions" + str(int(magnification * 10)) + holdout_ext + flip_ext + "_" + ext_name + "/"
+    dst_dir += "predictions" + holdout_ext + flip_ext + "_" + ext_name + "/"
     if not os.path.exists(dst_dir):
         os.makedirs(dst_dir)
 
@@ -134,19 +135,27 @@ def predict_cubes(model_path, continue_job, only_patient_id=None, luna16=True, m
             labels_df.set_index(["id"], inplace=True)
 
     patient_ids = []
-    for file_name in os.listdir('/Users/macbook/Desktop/Lung Cancer Detection/OUTPUT/'):
+    file = '/Users/macbook/Desktop/Lung Cancer Detection/seriesuids.csv'
+    with open(file, "rt") as f:
+        csvreader = csv.reader(f)
+        for line in csvreader:
+            str1 = ""
+            line = str1.join(line)
+            patient_ids.append(line)
+    '''for file_name in os.listdir('/Users/macbook/Desktop/Lung Cancer Detection/OUTPUT/'):
         if not os.path.isdir('/Users/macbook/Desktop/Lung Cancer Detection/OUTPUT/'+ file_name):
             continue
-        patient_ids.append(file_name)   
+        patient_ids.append(file_name)'''   
 
     all_predictions_csv = []
     for patient_index, patient_id in enumerate(reversed(patient_ids)):
+        patient_id1 = patient_id[-5:]
         if not luna16:
-            if patient_id not in labels_df.index:
+            if patient_id1 not in labels_df.index:
                 continue
-        if "metadata" in patient_id:
+        if "metadata" in patient_id1:
             continue
-        if only_patient_id is not None and only_patient_id != patient_id:
+        if only_patient_id is not None and only_patient_id != patient_id1:
             continue
 
         if holdout_no is not None and train_data:
@@ -155,17 +164,20 @@ def predict_cubes(model_path, continue_job, only_patient_id=None, luna16=True, m
             if patient_fold != holdout_no:
                 continue
 
-        print(patient_index, ": ", patient_id)
-        csv_target_path = dst_dir + patient_id + ".csv"
-        if continue_job and only_patient_id is None:
+        print(patient_index, ": ", patient_id1)
+        csv_target_path = dst_dir + "submission" + ".csv"
+        '''if continue_job and only_patient_id is None:
             if os.path.exists(csv_target_path):
-                continue
+                continue'''
+        try:
+            patient_img = load_patient_images(patient_id1, "/Users/macbook/Desktop/Lung Cancer Detection/OUTPUT/*", "*_i.png", [])
+        except Exception as ex:
+            continue
 
-        patient_img = load_patient_images(patient_id, "/Users/macbook/Desktop/Lung Cancer Detection/OUTPUT/*", "*_i.png", [])
         if magnification != 1:
             patient_img = rescale_patient_images(patient_img, (1, 1, 1), magnification)
 
-        patient_mask = load_patient_images(patient_id, "/Users/macbook/Desktop/Lung Cancer Detection/OUTPUT/*", "*_m.png", [])
+        patient_mask = load_patient_images(patient_id1, "/Users/macbook/Desktop/Lung Cancer Detection/OUTPUT/*", "*_m.png", [])
         if magnification != 1:
             patient_mask = rescale_patient_images(patient_mask, (1, 1, 1), magnification, is_mask_image=True)
 
@@ -237,9 +249,9 @@ def predict_cubes(model_path, continue_job, only_patient_id=None, luna16=True, m
                                     diameter_perc = round(2 * step / patient_img.shape[2], 4)
                                     diameter_perc = round(diameter_mm / patient_img.shape[2], 4)
                                     nodule_chance = round(nodule_chance, 4)
-                                    patient_predictions_csv_line = [annotation_index, p_x_perc, p_y_perc, p_z_perc, diameter_perc, nodule_chance, diameter_mm]
+                                    patient_predictions_csv_line = [patient_id, p_x_perc, p_y_perc, p_z_perc, nodule_chance]
                                     patient_predictions_csv.append(patient_predictions_csv_line)
-                                    all_predictions_csv.append([patient_id] + patient_predictions_csv_line)
+                                    all_predictions_csv.append([patient_id1] + patient_predictions_csv_line)
                                     annotation_index += 1
 
                             batch_list = []
@@ -248,8 +260,8 @@ def predict_cubes(model_path, continue_job, only_patient_id=None, luna16=True, m
                     if done_count % 10000 == 0:
                         print("Done: ", done_count, " skipped:", skipped_count)
 
-        df = pandas.DataFrame(patient_predictions_csv, columns=["anno_index", "coord_x", "coord_y", "coord_z", "diameter", "nodule_chance", "diameter_mm"])
-        filter_patient_nodules_predictions(df, patient_id, CROP_SIZE * magnification)
+        df = pandas.DataFrame(patient_predictions_csv, columns=["seriesuid", "coordX", "coordY", "coordZ", "probability"])
+        filter_patient_nodules_predictions(df, patient_id1, CROP_SIZE * magnification)
         df.to_csv(csv_target_path, index=False)
 
         # cols = ["anno_index", "nodule_chance", "diamete_mm"] + ["f" + str(i) for i in range(64)]
@@ -265,7 +277,7 @@ def predict_cubes(model_path, continue_job, only_patient_id=None, luna16=True, m
         # df = pandas.DataFrame(all_predictions_csv, columns=["patient_id", "anno_index", "coord_x", "coord_y", "coord_z", "diameter", "nodule_chance", "diameter_mm"])
         # df.to_csv("c:/tmp/tmp2.csv", index=False)
 
-        print(predict_volume.mean())
+        #print(predict_volume.mean())
         print("Done in : ", sw.get_elapsed_seconds(), " seconds")
 
 class Stopwatch(object):
