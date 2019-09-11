@@ -60,7 +60,7 @@ def filter_patient_nodules_predictions(df_nodule_predictions: pandas.DataFrame, 
         center_y = int(round(y_perc * patient_mask.shape[1]))
         center_z = int(round(z_perc * patient_mask.shape[0]))
 
-        #mal_score = row["diameter_mm"]
+        mal_score = row["diameter_mm"]
         start_y = center_y - view_size / 2
         start_x = center_x - view_size / 2
         nodule_in_mask = False
@@ -77,13 +77,13 @@ def filter_patient_nodules_predictions(df_nodule_predictions: pandas.DataFrame, 
             print("Nodule not in mask: ", (center_x, center_y, center_z))
             if mal_score > 0:
                 mal_score *= -1
-            #df_nodule_predictions.loc[index, "diameter_mm"] = mal_score
+            df_nodule_predictions.loc[index, "diameter_mm"] = mal_score
         else:
             if center_z < 30:
                 print("Z < 30: ", patient_id, " center z:", center_z, " y_perc: ",  y_perc)
                 if mal_score > 0:
                     mal_score *= -1
-                #df_nodule_predictions.loc[index, "diameter_mm"] = mal_score
+                df_nodule_predictions.loc[index, "diameter_mm"] = mal_score
 
 
             if (z_perc > 0.75 or z_perc < 0.25) and y_perc > 0.85:
@@ -91,7 +91,6 @@ def filter_patient_nodules_predictions(df_nodule_predictions: pandas.DataFrame, 
 
             if center_z < 50 and y_perc < 0.30:
                 print("SUSPICIOUS FALSEPOSITIVE OUT OF RANGE: ", patient_id, " center z:", center_z, " y_perc: ",  y_perc)
-
     df_nodule_predictions.drop(df_nodule_predictions.index[delete_indices], inplace=True)
     return df_nodule_predictions
 
@@ -146,7 +145,7 @@ def predict_cubes(model_path, continue_job, only_patient_id=None, luna16=True, m
         if not os.path.isdir('/Users/macbook/Desktop/Lung Cancer Detection/OUTPUT/'+ file_name):
             continue
         patient_ids.append(file_name)'''   
-
+    patient_predictions_csv = []
     all_predictions_csv = []
     for patient_index, patient_id in enumerate(reversed(patient_ids)):
         patient_id1 = patient_id[-5:]
@@ -203,7 +202,6 @@ def predict_cubes(model_path, continue_job, only_patient_id=None, luna16=True, m
         batch_size = 128
         batch_list = []
         batch_list_coords = []
-        patient_predictions_csv = []
         cube_img = None
         annotation_index = 0
 
@@ -249,7 +247,7 @@ def predict_cubes(model_path, continue_job, only_patient_id=None, luna16=True, m
                                     diameter_perc = round(2 * step / patient_img.shape[2], 4)
                                     diameter_perc = round(diameter_mm / patient_img.shape[2], 4)
                                     nodule_chance = round(nodule_chance, 4)
-                                    patient_predictions_csv_line = [patient_id, p_x_perc, p_y_perc, p_z_perc, nodule_chance]
+                                    patient_predictions_csv_line = [patient_id, p_x_perc, p_y_perc, p_z_perc, diameter_perc, nodule_chance, diameter_mm]
                                     patient_predictions_csv.append(patient_predictions_csv_line)
                                     all_predictions_csv.append([patient_id1] + patient_predictions_csv_line)
                                     annotation_index += 1
@@ -260,9 +258,9 @@ def predict_cubes(model_path, continue_job, only_patient_id=None, luna16=True, m
                     if done_count % 10000 == 0:
                         print("Done: ", done_count, " skipped:", skipped_count)
 
-        df = pandas.DataFrame(patient_predictions_csv, columns=["seriesuid", "coordX", "coordY", "coordZ", "probability"])
-        filter_patient_nodules_predictions(df, patient_id1, CROP_SIZE * magnification)
-        df.to_csv(csv_target_path, index=False)
+        df = pandas.DataFrame(patient_predictions_csv, columns=["seriesuid", "coordX", "coordY", "coordZ", "diameter", "probability", "diameter_mm"])
+        filter_patient_nodules_predictions(df, patient_id, CROP_SIZE * magnification)
+        
 
         # cols = ["anno_index", "nodule_chance", "diamete_mm"] + ["f" + str(i) for i in range(64)]
         # df_features = pandas.DataFrame(patient_features_csv, columns=cols)
@@ -277,8 +275,9 @@ def predict_cubes(model_path, continue_job, only_patient_id=None, luna16=True, m
         # df = pandas.DataFrame(all_predictions_csv, columns=["patient_id", "anno_index", "coord_x", "coord_y", "coord_z", "diameter", "nodule_chance", "diameter_mm"])
         # df.to_csv("c:/tmp/tmp2.csv", index=False)
 
-        #print(predict_volume.mean())
+        print(predict_volume.mean())
         print("Done in : ", sw.get_elapsed_seconds(), " seconds")
+    return df
 
 class Stopwatch(object):
 
@@ -469,7 +468,6 @@ def load_cube_img(src_path, rows, cols, size):
 
 
 if __name__ == "__main__":
-
     CONTINUE_JOB = True
     only_patient_id = None  # "ebd601d40a18634b100c92e7db39f585"
 
@@ -486,8 +484,11 @@ if __name__ == "__main__":
                     os.remove(file_path)
 
     if True:
-        for magnification in [1, 1.5, 2]:  #
-            predict_cubes("/Users/macbook/Desktop/model_luna16_full__fs_best.hd5", CONTINUE_JOB, only_patient_id=only_patient_id, magnification=magnification, flip=False, train_data=True, holdout_no=None, ext_name="luna16_fs")
-            predict_cubes("/Users/macbook/Desktop/model_luna16_full__fs_best.hd5", CONTINUE_JOB, only_patient_id=only_patient_id, magnification=magnification, flip=False, train_data=False, holdout_no=None, ext_name="luna16_fs")
+        df2 = pandas.DataFrame(columns=["seriesuid", "coordX", "coordY", "coordZ", "diameter", "probability", "diameter_mm"])
+        for magnification in [1, 1.5, 2]:
+            df = predict_cubes("/Users/macbook/Desktop/model_luna16_full__fs_best.hd5", CONTINUE_JOB, only_patient_id=only_patient_id, magnification=magnification, flip=False, train_data=True, holdout_no=None, ext_name="luna16_fs")
+            df2 = df2.append(df)
+            #predict_cubes("/Users/macbook/Desktop/model_luna16_full__fs_best.hd5", CONTINUE_JOB, only_patient_id=only_patient_id, magnification=magnification, flip=False, train_data=False, holdout_no=None, ext_name="luna16_fs")
+        df2.to_csv('/Users/macbook/Desktop/Lung Cancer Detection/Nodule_Detection/submission.csv', index=False)
 
 
